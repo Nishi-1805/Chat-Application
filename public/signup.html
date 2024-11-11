@@ -22,5 +22,22 @@
 
         <input type="submit" value="Sign Up">
     </form>
+    <script>
+        async function handleSubmit(event) {
+            event.preventDefault(); 
+
+            const formData = new FormData(event.target); 
+
+            const response = await fetch('/', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.text(); 
+
+            alert(result);
+        }
+    </script>
 </body>
+
 </html>
