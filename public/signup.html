@@ -7,50 +7,6 @@
 </head>
 <body>
     <h1>Sign Up</h1>
-    <form action="/" method="POST">
-        <label for="name">Name:</label><br>
-        <input type="text" id="name" name="name" required><br><br>
-
-        <label for="email">Email:</label><br>
-        <input type="email" id="email" name="email" required><br><br>
-
-        <label for="phone">Phone Number:</label><br>
-        <input type="tel" id="phone" name="phone" required><br><br>
-
-        <label for="password">Password:</label><br>
-        <input type="password" id="password" name="password" required><br><br>
-
-        <input type="submit" value="Sign Up">
-    </form>
-    <script>
-        async function handleSubmit(event) {
-            event.preventDefault(); 
-
-            const formData = new FormData(event.target); 
-
-            const response = await fetch('/', {
-                method: 'POST',
-                body: formData
-            });
-
-            const result = await response.text(); 
-
-            alert(result);
-        }
-    </script>
-</body>
-
-</html>
-
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sign Up</title>
-</head>
-<body>
-    <h1>Sign Up</h1>
     <form id="signupForm">
         <label for="name">Name:</label><br>
         <input type="text" id="name" name="name" required><br><br>
@@ -66,13 +22,16 @@
 
         <input type="submit" value="Sign Up">
     </form>
+
+    <p>Already have an account? <a href="/login">Login here</a></p> 
+
     <script>
         document.getElementById('signupForm').addEventListener('submit', handleSubmit);
 
         async function handleSubmit(event) {
-            event.preventDefault(); // Prevent the default form submission
+            event.preventDefault(); 
 
-            const formData = new FormData(event.target); // Get the form data
+            const formData = new FormData(event.target); 
 
             // Debugging: Log the form data
             for (const [key, value] of formData.entries()) {
@@ -87,12 +46,11 @@
                 }
             });
 
-            const result = await response.text(); // Get the response text
-
-            // Display the response to the user
-            alert(result);
             if (response.ok) {
-                event.target.reset(); // Reset the form fields
+                window.location.href = '/login'; 
+            } else {
+                const result = await response.text(); 
+                alert(result);
             }
         }
     </script>

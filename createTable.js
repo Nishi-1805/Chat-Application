@@ -1,4 +1,3 @@
-// createTable.js
 const connection = require('./sqlconnection');
 
 const createTableQuery = `
@@ -20,5 +19,4 @@ connection.query(createTableQuery, (err, result) => {
     console.log('Table created successfully:', result);
 });
 
-// Close the connection
 connection.end();
