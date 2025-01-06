@@ -21,6 +21,10 @@ app.get('/login', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
+app.get('/chat', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'chat.html'));
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/', authRoutes);

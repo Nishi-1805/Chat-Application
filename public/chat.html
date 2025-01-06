@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Application</title>
+    <style>
+        body {
+            display: flex;
+            font-family: Arial, sans-serif;
+        }
+        #userList {
+            width: 200px;
+            border-right: 1px solid #ccc;
+            padding: 10px;
+        }
+        #chatArea {
+            flex: 1;
+            padding: 10px;
+        }
+        #messages {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            margin-bottom: 10px;
+            padding: 10px;
+        }
+        #messageInput {
+            width: calc(100% - 20px);
+        }
+        #logoutButton {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="userList">
+        <h3>Users</h3>
+        <ul id="users"></ul>
+        <button id="logoutButton">Logout</button>
+    </div>
+    <div id="chatArea">
+        <h3>Chat</h3>
+        <div id="messages"></div>
+        <input type="text" id="messageInput" placeholder="Type a message..." />
+        <button id="sendButton">Send</button>
+    </div>
+
+    <script>
+        const usersList = document.getElementById('users');
+        const messagesDiv = document.getElementById('messages');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const logoutButton = document.getElementById('logoutButton');
+
+        // Fetch logged-in users from the backend
+        async function fetchUsers() {
+            const response = await fetch('/users', {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('jwt')}`
+                }
+            });
+            if (response.ok) {
+                const users = await response.json();
+                users.forEach(user => {
+                    const li = document.createElement('li');
+                    li.textContent = user.name;
+                    usersList.appendChild(li);
+                });
+            } else {
+                console.error('Failed to fetch users');
+            }
+        }
+
+        // Fetch all messages from the server
+        async function fetchMessages() {
+            const response = await fetch('/messages', {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('jwt')}`
+                }
+            });
+            if (response.ok) {
+                const messages = await response.json();
+                messages.forEach(msg => {
+                    const messageElement = document.createElement('div');
+                    messageElement.textContent = `${msg.name}: ${msg.message}`; 
+                    messagesDiv.appendChild(messageElement);
+                });
+            } else {
+                console.error('Failed to fetch messages');
+            }
+        }
+
+        // Send message functionality
+        sendButton.addEventListener('click', async () => {
+            const message = messageInput.value;
+            if (message) {
+                await sendMessageToServer(message);
+                messageInput.value = ''; 
+                fetchMessages(); 
+            }
+        });
+
+        // Function to send message to the server
+        async function sendMessageToServer(message) {
+            const response = await fetch('/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('jwt')}`
+                },
+                body: JSON.stringify({ message })
+            });
+
+            if (!response.ok) {
+                console.error('Failed to send message');
+            }
+        }
+
+        // Logout functionality
+        logoutButton.addEventListener('click', async () => {
+            const response = await fetch('/logout', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('jwt')}`
+                }
+            });
+
+            if (response.ok) {
+                localStorage.removeItem('jwt'); 
+                window.location.href = '/login'; 
+            } else {
+                console.error('Failed to log out');
+            }
+        });
+
+        // Call the function to fetch users and messages when the page loads
+        fetchUsers();
+        fetchMessages();
+    </script>
+</body>
+</html>

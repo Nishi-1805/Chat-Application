@@ -38,6 +38,8 @@
                 console.log('Received JWT:', token); 
                 localStorage.setItem('jwt', token); 
                 alert('Login successful!'); 
+
+                window.location.href = '/chat';
             } else {
                 const errorMessage = await response.text();
                 alert(errorMessage); 
