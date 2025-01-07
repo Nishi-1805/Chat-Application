@@ -46,6 +46,7 @@
         <button id="sendButton">Send</button>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/jwt-decode/build/jwt-decode.min.js"></script>
     <script>
         const usersList = document.getElementById('users');
         const messagesDiv = document.getElementById('messages');
@@ -82,22 +83,30 @@
             if (response.ok) {
                 const messages = await response.json();
                 messages.forEach(msg => {
-                    const messageElement = document.createElement('div');
-                    messageElement.textContent = `${msg.name}: ${msg.message}`; 
-                    messagesDiv.appendChild(messageElement);
+                    appendMessage(msg.name, msg.message); 
                 });
             } else {
                 console.error('Failed to fetch messages');
             }
         }
 
+        // Function to append a message to the chat area
+        function appendMessage(userName, message) {
+            const messageElement = document.createElement('div');
+            messageElement.textContent = `${userName}: ${message}`; 
+            messagesDiv.appendChild(messageElement);
+        }
+
         // Send message functionality
         sendButton.addEventListener('click', async () => {
-            const message = messageInput.value;
+        const message = messageInput.value;
             if (message) {
+                const token = localStorage.getItem('jwt');
+                const decodedToken = jwt_decode(token); 
+                const userName = decodedToken.name; 
                 await sendMessageToServer(message);
                 messageInput.value = ''; 
-                fetchMessages(); 
+                appendMessage(userName, message); 
             }
         });
 
