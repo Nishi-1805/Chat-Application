@@ -56,13 +56,19 @@
 
         // Fetch logged-in users from the backend
         async function fetchUsers() {
+            const token = localStorage.getItem('jwt');
+    if (!token) {
+        console.error('No token found');
+        return;
+    }
             const response = await fetch('/users', {
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('jwt')}`
+                   'Authorization': `Bearer ${token}`
                 }
             });
             if (response.ok) {
                 const users = await response.json();
+                usersList.innerHTML = ''; 
                 users.forEach(user => {
                     const li = document.createElement('li');
                     li.textContent = user.name;
@@ -75,13 +81,19 @@
 
         // Fetch all messages from the server
         async function fetchMessages() {
+            const token = localStorage.getItem('jwt');
+    if (!token) {
+        console.error('No token found');
+        return;
+    }
             const response = await fetch('/messages', {
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('jwt')}`
+                 'Authorization': `Bearer ${token}`
                 }
             });
             if (response.ok) {
                 const messages = await response.json();
+                messagesDiv.innerHTML = ''; 
                 messages.forEach(msg => {
                     appendMessage(msg.name, msg.message); 
                 });
@@ -99,53 +111,70 @@
 
         // Send message functionality
         sendButton.addEventListener('click', async () => {
-        const message = messageInput.value;
-            if (message) {
-                const token = localStorage.getItem('jwt');
-                const decodedToken = jwt_decode(token); 
-                const userName = decodedToken.name; 
-                await sendMessageToServer(message);
-                messageInput.value = ''; 
-                appendMessage(userName, message); 
-            }
-        });
+    const message = messageInput.value;
+    if (message) {
+        const token = localStorage.getItem('jwt');
+        if (!token) {
+            console.error('No token found');
+            return;
+        }
+        const decodedToken = jwt_decode(token); 
+        console.log('Decoded Token:', decodedToken); 
+        const userId = decodedToken.id; 
+        await sendMessageToServer(message, userId); 
+        messageInput.value = ''; 
+        appendMessage(decodedToken.name, message); 
+    }
+});
 
         // Function to send message to the server
-        async function sendMessageToServer(message) {
-            const response = await fetch('/messages', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('jwt')}`
-                },
-                body: JSON.stringify({ message })
-            });
+        async function sendMessageToServer(message, userId) {
+    const response = await fetch('/messages', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('jwt')}`
+        },
+        body: JSON.stringify({ message, userId }) 
+    });
 
-            if (!response.ok) {
-                console.error('Failed to send message');
-            }
+    if (!response.ok) {
+        console.error('Failed to send message');
+    }
+}
+
+        let messageFetchInterval; 
+
+// Call the function to fetch users and messages when the page loads
+fetchUsers();
+fetchMessages();
+
+// Start polling for new messages every second
+messageFetchInterval = setInterval(fetchMessages, 1000);
+
+logoutButton.addEventListener('click', async () => {
+    const response = await fetch('/logout', {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${localStorage.getItem('jwt')}`
         }
+    });
 
-        // Logout functionality
-        logoutButton.addEventListener('click', async () => {
-            const response = await fetch('/logout', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('jwt')}`
-                }
-            });
-
-            if (response.ok) {
-                localStorage.removeItem('jwt'); 
-                window.location.href = '/login'; 
-            } else {
-                console.error('Failed to log out');
-            }
-        });
+    if (response.ok) {
+        localStorage.removeItem('jwt'); 
+        clearInterval(messageFetchInterval); 
+        window.location.href = '/login'; 
+    } else {
+        console.error('Failed to log out');
+    }
+});
 
         // Call the function to fetch users and messages when the page loads
         fetchUsers();
         fetchMessages();
+
+        // Polling for new messages every second
+        setInterval(fetchMessages, 1000);
     </script>
 </body>
 </html>

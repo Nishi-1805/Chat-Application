@@ -8,9 +8,10 @@ const upload = multer();
 
 router.post('/signup', upload.none(), authController.signup); 
 router.post('/login', upload.none(), authController.login); 
-router.post('/logout', authenticateJWT, authController.logout); 
 router.get('/users', authenticateJWT, authController.getUsers); 
-router.post('/messages', authenticateJWT, authController.sendMessage); 
 router.get('/messages', authenticateJWT, authController.getMessages); 
+router.post('/messages', authenticateJWT, authController.sendMessage); 
+router.post('/logout', authenticateJWT, authController.logout); 
+
 
 module.exports = router;
