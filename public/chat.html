@@ -57,13 +57,13 @@
         // Fetch logged-in users from the backend
         async function fetchUsers() {
             const token = localStorage.getItem('jwt');
-    if (!token) {
-        console.error('No token found');
-        return;
-    }
+            if (!token) {
+                console.error('No token found');
+                return;
+            }
             const response = await fetch('/users', {
                 headers: {
-                   'Authorization': `Bearer ${token}`
+                    'Authorization': `Bearer ${token}`
                 }
             });
             if (response.ok) {
@@ -81,26 +81,44 @@
 
         // Fetch all messages from the server
         async function fetchMessages() {
-            const token = localStorage.getItem('jwt');
+    const token = localStorage.getItem('jwt');
     if (!token) {
         console.error('No token found');
         return;
     }
-            const response = await fetch('/messages', {
-                headers: {
-                 'Authorization': `Bearer ${token}`
-                }
-            });
-            if (response.ok) {
-                const messages = await response.json();
-                messagesDiv.innerHTML = ''; 
-                messages.forEach(msg => {
-                    appendMessage(msg.name, msg.message); 
-                });
-            } else {
-                console.error('Failed to fetch messages');
-            }
+
+    // Load messages from local storage
+    const storedMessages = JSON.parse(localStorage.getItem('messages')) || [];
+    messagesDiv.innerHTML = ''; // Clear existing messages
+
+    // Display stored messages
+    storedMessages.forEach(msg => {
+        appendMessage(msg.name, msg.message); // Display stored messages
+    });
+
+    // Fetch new messages from the server
+    const response = await fetch('/messages', {
+        headers: {
+            'Authorization': `Bearer ${token}`
         }
+    });
+    if (response.ok) {
+        const messages = await response.json();
+
+        // Create a set to track displayed messages
+        const displayedMessages = new Set(storedMessages.map(msg => msg.message));
+
+        // Append only new messages that are not already displayed
+        messages.forEach(msg => {
+            if (!displayedMessages.has(msg.message)) {
+                appendMessage(msg.name, msg.message);
+                storeMessageInLocalStorage(msg.name, msg.message); // Store new messages
+            }
+        });
+    } else {
+        console.error('Failed to fetch messages');
+    }
+}
 
         // Function to append a message to the chat area
         function appendMessage(userName, message) {
@@ -111,70 +129,85 @@
 
         // Send message functionality
         sendButton.addEventListener('click', async () => {
-    const message = messageInput.value;
-    if (message) {
-        const token = localStorage.getItem('jwt');
-        if (!token) {
-            console.error('No token found');
-            return;
-        }
-        const decodedToken = jwt_decode(token); 
-        console.log('Decoded Token:', decodedToken); 
-        const userId = decodedToken.id; 
-        await sendMessageToServer(message, userId); 
-        messageInput.value = ''; 
-        appendMessage(decodedToken.name, message); 
-    }
-});
+            const message = messageInput.value;
+            if (message) {
+                const token = localStorage.getItem('jwt');
+                if (!token) {
+                    console.error('No token found');
+                    return;
+                }
+                const decodedToken = jwt_decode(token); 
+                const userId = decodedToken.id; 
+                await sendMessageToServer(message, userId); 
+                messageInput.value = ''; 
+            }
+        });
 
         // Function to send message to the server
         async function sendMessageToServer(message, userId) {
-    const response = await fetch('/messages', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('jwt')}`
-        },
-        body: JSON.stringify({ message, userId }) 
-    });
+            const response = await fetch('/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('jwt')}`
+                },
+                body: JSON.stringify({ message, userId })
+            });
 
-    if (!response.ok) {
-        console.error('Failed to send message');
-    }
-}
+            if (response.ok) {
+                // Store the message in local storage after sending
+                const decodedToken = jwt_decode(localStorage.getItem('jwt'));
+                storeMessageInLocalStorage(decodedToken.name, message);
+                appendMessage(decodedToken.name, message); // Display the new message immediately
+            } else {
+                console.error('Failed to send message');
+            }
+        }
+
+        function storeMessageInLocalStorage(userName, message) {
+            const storedMessages = JSON.parse(localStorage.getItem('messages')) || [];
+            
+            // Check if the message already exists in local storage
+            const isMessageExists = storedMessages.some(storedMsg => storedMsg.message === message);
+            if (!isMessageExists) {
+                // Add the new message to the stored messages
+                storedMessages.push({ name: userName, message: message });
+
+                // Limit to the most recent 10 messages
+                if (storedMessages.length > 10) {
+                    storedMessages.shift(); // Remove the oldest message
+                }
+
+                // Save the updated messages back to local storage
+                localStorage.setItem('messages', JSON.stringify(storedMessages));
+            }
+        }
 
         let messageFetchInterval; 
-
-// Call the function to fetch users and messages when the page loads
-fetchUsers();
-fetchMessages();
-
-// Start polling for new messages every second
-messageFetchInterval = setInterval(fetchMessages, 1000);
-
-logoutButton.addEventListener('click', async () => {
-    const response = await fetch('/logout', {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${localStorage.getItem('jwt')}`
-        }
-    });
-
-    if (response.ok) {
-        localStorage.removeItem('jwt'); 
-        clearInterval(messageFetchInterval); 
-        window.location.href = '/login'; 
-    } else {
-        console.error('Failed to log out');
-    }
-});
 
         // Call the function to fetch users and messages when the page loads
         fetchUsers();
         fetchMessages();
 
-        // Polling for new messages every second
-        setInterval(fetchMessages, 1000);
+        // Start polling for new messages every second
+        messageFetchInterval = setInterval(fetchMessages, 1000);
+
+        logoutButton.addEventListener('click', async () => {
+            const response = await fetch('/logout', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('jwt')}`
+                }
+            });
+
+            if (response.ok) {
+                localStorage.removeItem('jwt'); 
+                clearInterval(messageFetchInterval); 
+                window.location.href = '/login'; 
+            } else {
+                console.error('Failed to log out');
+            }
+        });
     </script>
 </body>
 </html>
