@@ -43,6 +43,10 @@ exports.signup = async (req, res) => {
 exports.login = async (req, res) => {
     const { email, password } = req.body;
 
+    if (!email || !password) {
+        return res.status(400).send('Email and password are required');
+    }
+
     connection.query('SELECT * FROM chatUsers WHERE email = ?', [email], async (err, results) => {
         if (err) {
             console.error('Error checking user:', err);
@@ -133,8 +137,9 @@ exports.createGroup = (req, res) => {
             return res.status(500).send('Internal server error');
         }
         const groupId = results.insertId;
-        // Automatically add the creator to the group
-        connection.query('INSERT INTO GroupMembers (group_id, user_id) VALUES (?, ?)', [groupId, userId], (err) => {
+
+        // Automatically add the creator to the group as an admin
+        connection.query('INSERT INTO GroupMembers (group_id, user_id, isAdmin) VALUES (?, ?, TRUE)', [groupId, userId], (err) => {
             if (err) {
                 console.error('Error adding user to group:', err);
                 return res.status(500).send('Internal server error');
@@ -144,28 +149,129 @@ exports.createGroup = (req, res) => {
     });
 };
 
+// Search Users Controller
+exports.searchUsers = (req, res) => {
+    const query = req.query.query;
+    const userId = req.user.id; // Get the ID of the logged-in user
+
+    const sql = `
+        SELECT id, name, email 
+        FROM chatUsers 
+        WHERE (name LIKE ? OR email LIKE ? OR phone LIKE ?) 
+        AND id != ?`;
+
+    const values = [`%${query}%`, `%${query}%`, `%${query}%`, userId];
+
+    connection.query(sql, values, (err, results) => {
+        if (err) {
+            console.error('Error searching users:', err);
+            return res.status(500).send('Internal server error');
+        }
+        res.json(results);
+    });
+};
+
+// Fetch Group Members Controller
+exports.fetchGroupMembers = (req, res) => {
+    const groupId = req.params.groupId; // Get the group ID from the request parameters
+
+    // Query to get members of the group
+    connection.query('SELECT u.id, u.name, u.email FROM GroupMembers gm JOIN chatUsers u ON gm.user_id = u.id WHERE gm.group_id = ?', [groupId], (err, results) => {
+        if (err) {
+            console.error('Error fetching group members:', err);
+            return res.status(500).send('Internal server error');
+        }
+        res.json(results); // Send back the list of group members
+    });
+};
+
 // Invite Users to Group
 exports.inviteUsersToGroup = (req, res) => {
     const groupId = req.params.groupId;
     const userIds = req.body.userIds; // Array of user IDs to invite
 
-    // Insert each user into the GroupInvitations table
-    const queries = userIds.map(userId => {
-        return new Promise((resolve, reject) => {
-            connection.query('INSERT INTO GroupInvitations (group_id, user_id) VALUES (?, ?)', [groupId, userId], (err) => {
-                if (err) {
-                    console.error('Error inviting user to group:', err);
-                    reject(err);
-                } else {
-                    resolve();
-                }
+    // Check if the user is an admin of the group
+    const userId = req.user.id;
+    connection.query('SELECT * FROM GroupMembers WHERE group_id = ? AND user_id = ? AND isAdmin = TRUE', [groupId, userId], (err, results) => {
+        if (err) {
+            console.error('Error checking admin status:', err);
+            return res.status(500).send('Internal server error');
+        }
+
+        if (results.length === 0) {
+            return res.status(403).send('Only admins can invite users to the group');
+        }
+
+        // Insert each user into the GroupInvitations table
+        const queries = userIds.map(userId => {
+            return new Promise((resolve, reject) => {
+                connection.query('INSERT INTO GroupInvitations (group_id, user_id) VALUES (?, ?)', [groupId, userId], (err) => {
+                    if (err) {
+                        console.error('Error inviting user to group:', err);
+                        reject(err);
+                    } else {
+                        resolve();
+                    }
+                });
             });
         });
-    });
 
-    Promise.all(queries)
-        .then(() => res.status(200).send('Users invited successfully'))
-        .catch(() => res.status(500).send('Internal server error'));
+        Promise.all(queries)
+            .then(() => res.status(200).send('Users invited successfully'))
+            .catch(() => res.status(500).send('Internal server error'));
+    });
+};
+
+// Promote User to Admin
+exports.promoteUserToAdmin = (req, res) => {
+    const groupId = req.params.groupId;
+    const { userId } = req.body; // User ID to promote
+
+    // Check if the user is an admin of the group
+    const adminId = req.user.id;
+    connection.query('SELECT * FROM GroupMembers WHERE group_id = ? AND user_id = ? AND isAdmin = TRUE', [groupId, adminId], (err, results) => {
+        if (err) {
+            console.error('Error checking admin status:', err);
+            return res.status(500).send('Internal server error');
+        }
+
+        if (results.length === 0) {
+            return res.status(403).send('Only admins can promote users');
+        }
+
+        // Update the isAdmin status
+        connection.query('UPDATE GroupMembers SET isAdmin = TRUE WHERE group_id = ? AND user_id = ?', [groupId, userId], (err) => {
+            if (err) {
+                console.error('Error promoting user:', err);
+                return res.status(500).send('Internal server error');
+            }
+            res.send('User  promoted to admin successfully');
+        });
+    });
+};
+
+// Remove User from Group
+exports.removeUserFromGroup = (req, res) => {
+    const groupId = req.params.groupId;
+    const { userId } = req.body; // User ID to remove
+
+    // Check if the user is an admin of the group
+    const adminId = req.user.id;
+    connection.query('SELECT * FROM GroupMembers WHERE group_id = ? AND user_id = ? AND isAdmin = TRUE', [groupId, adminId], (err, results) => {
+        if (err) {
+            console.error('Error checking admin status:', err);
+            return res.status(500).send('Internal server error');
+        }
+
+ // Remove the user from the group
+        connection.query('DELETE FROM GroupMembers WHERE group_id = ? AND user_id = ?', [groupId, userId], (err) => {
+            if (err) {
+                console.error('Error removing user from group:', err);
+                return res.status(500).send('Internal server error');
+            }
+            res.send('User  removed from group successfully');
+        });
+    });
 };
 
 // Fetch User Invitations
@@ -268,14 +374,27 @@ exports.getUserGroups = (req, res) => {
 exports.sendGroupMessage = (req, res) => {
     const { message } = req.body;
     const userId = req.user.id; 
-    const group_id = req.params.groupId;
+    const groupId = req.params.groupId;
 
-    connection.query('INSERT INTO GroupMessages (group_id, user_id, message, timestamp) VALUES (?, ?, ?, NOW())', [group_id, userId, message], (err) => {
+    // Check if the user is a member of the group
+    connection.query('SELECT * FROM GroupMembers WHERE group_id = ? AND user_id = ?', [groupId, userId], (err, results) => {
         if (err) {
-            console.error('Error saving message:', err);
+            console.error('Error checking group membership:', err);
             return res.status(500).send('Internal server error');
         }
-        res.status(200).send('Message sent successfully');
+
+        if (results.length === 0) {
+            return res.status(403).send('You are not a member of this group');
+        }
+
+        const newMessage = { userId, message, timestamp: new Date() };
+        connection.query('INSERT INTO GroupMessages (group_id, user_id, message, timestamp) VALUES (?, ?, ?, NOW())', [groupId, userId, message], (err) => {
+            if (err) {
+                console.error('Error saving message:', err);
+                return res.status(500).send('Internal server error');
+            }
+            res.send('Message sent successfully');
+        });
     });
 };
 

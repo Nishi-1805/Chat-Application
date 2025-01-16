@@ -13,9 +13,15 @@ router.get('/messages', authenticateJWT, authController.getMessages);
 router.post('/messages', authenticateJWT, authController.sendMessage); 
 router.post('/logout', authenticateJWT, authController.logout);
 
+// User Search Route
+router.get('/users/search', authenticateJWT, authController.searchUsers);
+
 // Group routes
 router.post('/groups', authenticateJWT, authController.createGroup); 
 router.post('/groups/:groupId/invite', authenticateJWT, authController.inviteUsersToGroup); 
+router.post('/groups/:groupId/promote', authenticateJWT, authController.promoteUserToAdmin); 
+router.delete('/groups/:groupId/remove', authenticateJWT, authController.removeUserFromGroup); 
+router.get('/groups/:groupId/members', authenticateJWT, authController.fetchGroupMembers);
 router.get('/invitations', authenticateJWT, authController.fetchUserInvitations);
 router.post('/invitations/:id/accept', authenticateJWT, authController.acceptInvitation);
 router.delete('/invitations/:id/reject', authenticateJWT, authController.rejectInvitation);

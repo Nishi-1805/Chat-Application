@@ -50,10 +50,17 @@
         <ul id="inviteUsersList"></ul>
         <button id="inviteUsersButton">Invite Users</button>
     </div>
+    <input type="text" id="userSearch" placeholder="Search users..." />
+<button id="searchButton">Search</button>
+<ul id="searchResults"></ul>
     <div id="invitationsSection"> 
         <h3>Group Invitations</h3>
          <ul id="invitationsList"></ul>
            </div> 
+           <div id="groupMembersSection" style="display: none;">
+            <h3>Group Members</h3>
+            <ul id="groupMembersList"></ul>
+        </div>
     <div id="chatArea">
         <h3>Chat</h3>
         <div id="messages"></div>
@@ -148,6 +155,7 @@ async function fetchUserGroups() {
                 li.classList.add('selected');
                 fetchGroupMessages(group.id); // Fetch messages for the selected group
                 fetchUsersToInvite(group.id); // Fetch users to invite when a group is selected
+                fetchGroupMembers(group.id);
                 inviteUserSection.style.display = li.dataset.isAdmin ? 'block' : 'none'; // Show invite section only if admin
             });
             groupsList.appendChild(li);
@@ -307,6 +315,48 @@ async function rejectInvitation(invitationId) {
     }
 }
 
+async function fetchGroupMembers(groupId) {
+    const token = localStorage.getItem('jwt');
+    const response = await fetch(`/groups/${groupId}/members`, {
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+
+    if (response.ok) {
+        const members = await response.json();
+        displayGroupMembers(members);
+    } else {
+        console.error('Failed to fetch group members');
+    }
+}
+
+function displayGroupMembers(members) {
+    const groupMembersList = document.getElementById('groupMembersList');
+    groupMembersList.innerHTML = ''; // Clear previous members
+
+    members.forEach(member => {
+        const li = document.createElement('li');
+        li.textContent = `${member.name} (${member.email})`;
+
+        // Promote Button
+        const promoteButton = document.createElement('button');
+        promoteButton.textContent = 'Promote to Admin';
+        promoteButton.onclick = () => promoteUserToAdmin(member.id);
+
+        // Remove Button
+        const removeButton = document.createElement('button');
+        removeButton.textContent = 'Remove from Group';
+        removeButton.onclick = () => removeUserFromGroup(member.id);
+
+        li.appendChild(promoteButton);
+        li.appendChild(removeButton);
+        groupMembersList.appendChild(li);
+    });
+
+    document.getElementById('groupMembersSection').style.display = 'block'; // Show the group members section
+}
+
         // Create a new group
         createGroupButton.addEventListener('click', async () => {
             const groupName = groupNameInput.value;
@@ -413,6 +463,106 @@ async function rejectInvitation(invitationId) {
                 console.error('Failed to log out');
             }
         });
+
+        const userSearchInput = document.getElementById('userSearch');
+const searchButton = document.getElementById('searchButton');
+const searchResults = document.getElementById('searchResults');
+
+searchButton.addEventListener('click', async () => {
+    const query = userSearchInput.value;
+    const token = localStorage.getItem('jwt');
+    const response = await fetch(`/users/search?query=${query}`, {
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+    if (response.ok) {
+        const users = await response.json();
+        searchResults.innerHTML = ''; // Clear previous results
+        users.forEach(user => {
+            const li = document.createElement('li');
+            li.textContent = `${user.name} (${user.email})`;
+            li.dataset.userId = user.id; // Store user ID in a data attribute
+            li.addEventListener('click', () => {
+                // Logic to invite user to the group
+                inviteUserToGroup(user.id);
+            });
+            searchResults.appendChild(li);
+        });
+    } else {
+        console.error('Failed to search users');
+    }
+});
+
+async function inviteUserToGroup(userId) {
+    const groupId = getSelectedGroupId(); // Get the currently selected group ID
+    if (!groupId) {
+        console.error('No group selected');
+        alert('Please select a group to invite users to.');
+        return;
+    }
+    const token = localStorage.getItem('jwt');
+    const response = await fetch(`/groups/${groupId}/invite`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ userIds: [userId] }) // Invite the selected user
+    });
+
+    if (response.ok) {
+        alert('User  invited successfully!');
+    } else {
+        const errorMessage = await response.text();
+        console.error('Failed to invite user:', errorMessage);
+        alert(errorMessage);
+    }
+}
+
+async function promoteUserToAdmin(userId) {
+    const groupId = getSelectedGroupId(); // Get the currently selected group ID
+    const token = localStorage.getItem('jwt');
+    const response = await fetch(`/groups/${groupId}/promote`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ userId }) // Promote the selected user
+    });
+
+    if (response.ok) {
+        alert('User  promoted to admin successfully!');
+        fetchGroupMembers(groupId); // Refresh the group members list
+    } else {
+        const errorMessage = await response.text();
+        console.error('Failed to promote user:', errorMessage);
+        alert(errorMessage); // Show the error message to the user
+    }
+}
+
+async function removeUserFromGroup(userId) {
+    const groupId = getSelectedGroupId(); // Get the currently selected group ID
+    const token = localStorage.getItem('jwt');
+    const response = await fetch(`/groups/${groupId}/remove`, {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ userId }) // Remove the selected user
+    });
+
+    if (response.ok) {
+        alert('User  removed from group successfully!');
+        fetchGroupMembers(groupId); // Refresh the group members list
+    } else {
+        const errorMessage = await response.text();
+        console.error('Failed to remove user:', errorMessage);
+        alert(errorMessage); // Show the error message to the user
+    }
+}
     </script>
 </body>
 </html>

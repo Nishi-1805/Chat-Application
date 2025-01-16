@@ -49,6 +49,7 @@ const createGroupMembersTableQuery = `
         id INT AUTO_INCREMENT PRIMARY KEY,
         group_id INT NOT NULL,
         user_id INT NOT NULL,
+        isAdmin BOOLEAN DEFAULT FALSE, 
         joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (group_id) REFERENCES \`Groups\`(id) ON DELETE CASCADE,
         FOREIGN KEY (user_id) REFERENCES chatUsers(id) ON DELETE CASCADE
