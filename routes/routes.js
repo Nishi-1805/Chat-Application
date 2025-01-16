@@ -11,7 +11,17 @@ router.post('/login', upload.none(), authController.login);
 router.get('/users', authenticateJWT, authController.getUsers); 
 router.get('/messages', authenticateJWT, authController.getMessages); 
 router.post('/messages', authenticateJWT, authController.sendMessage); 
-router.post('/logout', authenticateJWT, authController.logout); 
+router.post('/logout', authenticateJWT, authController.logout);
 
+// Group routes
+router.post('/groups', authenticateJWT, authController.createGroup); 
+router.post('/groups/:groupId/invite', authenticateJWT, authController.inviteUsersToGroup); 
+router.get('/invitations', authenticateJWT, authController.fetchUserInvitations);
+router.post('/invitations/:id/accept', authenticateJWT, authController.acceptInvitation);
+router.delete('/invitations/:id/reject', authenticateJWT, authController.rejectInvitation);
+router.post('/groups/:groupId/leave', authenticateJWT, authController.leaveGroup); 
+router.get('/groups', authenticateJWT, authController.getUserGroups); 
+router.post('/groups/:groupId/messages', authenticateJWT, authController.sendGroupMessage); 
+router.get('/groups/:groupId/messages', authenticateJWT, authController.getGroupMessages); 
 
 module.exports = router;

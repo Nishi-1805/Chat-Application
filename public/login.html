@@ -40,6 +40,8 @@
                 alert('Login successful!'); 
 
                 window.location.href = '/chat';
+                 // Fetch user invitations after login
+    await fetchUserInvitations();
             } else {
                 const errorMessage = await response.text();
                 alert(errorMessage); 

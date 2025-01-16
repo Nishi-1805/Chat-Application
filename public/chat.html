@@ -9,7 +9,7 @@
             display: flex;
             font-family: Arial, sans-serif;
         }
-        #userList {
+        #userList, #groupList {
             width: 200px;
             border-right: 1px solid #ccc;
             padding: 10px;
@@ -39,6 +39,21 @@
         <ul id="users"></ul>
         <button id="logoutButton">Logout</button>
     </div>
+    <div id="groupList">
+        <h3>Groups</h3>
+        <ul id="groups"></ul>
+        <input type="text" id="groupName" placeholder="Group Name" />
+        <button id="createGroupButton">Create Group</button>
+    </div>
+    <div id="inviteUserSection" style="display: none;">
+        <h3>Invite Users to Group</h3>
+        <ul id="inviteUsersList"></ul>
+        <button id="inviteUsersButton">Invite Users</button>
+    </div>
+    <div id="invitationsSection"> 
+        <h3>Group Invitations</h3>
+         <ul id="invitationsList"></ul>
+           </div> 
     <div id="chatArea">
         <h3>Chat</h3>
         <div id="messages"></div>
@@ -49,10 +64,37 @@
     <script src="https://cdn.jsdelivr.net/npm/jwt-decode/build/jwt-decode.min.js"></script>
     <script>
         const usersList = document.getElementById('users');
+        const groupsList = document.getElementById('groups');
         const messagesDiv = document.getElementById('messages');
         const messageInput = document.getElementById('messageInput');
         const sendButton = document.getElementById('sendButton');
         const logoutButton = document.getElementById('logoutButton');
+        const createGroupButton = document.getElementById('createGroupButton');
+        const groupNameInput = document.getElementById('groupName');
+        const inviteUserSection = document.getElementById('inviteUserSection');
+        const inviteUsersList = document.getElementById('inviteUsersList');
+        const inviteUsersButton = document.getElementById('inviteUsersButton');
+
+        let userId; // Declare a variable to hold the user ID
+
+// Function to decode the JWT token and get the user ID
+function decodeToken() {
+    const token = localStorage.getItem('jwt');
+    if (token) {
+        const decoded = jwt_decode(token);
+        userId = decoded.id; // Store the user ID
+    }
+}
+
+// Call this function when the page loads
+decodeToken();
+
+        // Function to display a message in the chat area
+        function displayMessage(userName, message) {
+            const messageElement = document.createElement('div');
+            messageElement.textContent = `${userName}: ${message}`; 
+            messagesDiv.appendChild(messageElement);
+        }
 
         // Fetch logged-in users from the backend
         async function fetchUsers() {
@@ -79,118 +121,281 @@
             }
         }
 
-        // Fetch all messages from the server
-        async function fetchMessages() {
+// Fetch user groups from the server
+async function fetchUserGroups() {
     const token = localStorage.getItem('jwt');
     if (!token) {
         console.error('No token found');
         return;
     }
-
-    // Load messages from local storage
-    const storedMessages = JSON.parse(localStorage.getItem('messages')) || [];
-    messagesDiv.innerHTML = ''; // Clear existing messages
-
-    // Display stored messages
-    storedMessages.forEach(msg => {
-        appendMessage(msg.name, msg.message); // Display stored messages
-    });
-
-    // Fetch new messages from the server
-    const response = await fetch('/messages', {
+    const response = await fetch('/groups', {
         headers: {
             'Authorization': `Bearer ${token}`
         }
     });
     if (response.ok) {
-        const messages = await response.json();
-
-        // Create a set to track displayed messages
-        const displayedMessages = new Set(storedMessages.map(msg => msg.message));
-
-        // Append only new messages that are not already displayed
-        messages.forEach(msg => {
-            if (!displayedMessages.has(msg.message)) {
-                appendMessage(msg.name, msg.message);
-                storeMessageInLocalStorage(msg.name, msg.message); // Store new messages
-            }
+        const groups = await response.json();
+        groupsList.innerHTML = ''; 
+        groups.forEach(group => {
+            const li = document.createElement('li');
+            li.textContent = group.name;
+            li.dataset.groupId = group.id; // Store group ID in a data attribute
+            li.dataset.isAdmin = group.isAdmin === 1;  // Check if the user is the admin
+            li.addEventListener('click', () => {
+                // Remove 'selected' class from all groups
+                document.querySelectorAll('#groups li').forEach(item => item.classList.remove('selected'));
+                // Add 'selected' class to the clicked group
+                li.classList.add('selected');
+                fetchGroupMessages(group.id); // Fetch messages for the selected group
+                fetchUsersToInvite(group.id); // Fetch users to invite when a group is selected
+                inviteUserSection.style.display = li.dataset.isAdmin ? 'block' : 'none'; // Show invite section only if admin
+            });
+            groupsList.appendChild(li);
         });
     } else {
-        console.error('Failed to fetch messages');
+        console.error('Failed to fetch groups');
     }
 }
 
-        // Function to append a message to the chat area
-        function appendMessage(userName, message) {
-            const messageElement = document.createElement('div');
-            messageElement.textContent = `${userName}: ${message}`; 
-            messagesDiv.appendChild(messageElement);
+        // Fetch users to invite
+        async function fetchUsersToInvite(groupId) {
+            const token = localStorage.getItem('jwt');
+            if (!token) {
+                console.error('No token found');
+                return;
+            }
+            const response = await fetch('/users', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            if (response.ok) {
+                const users = await response.json();
+                inviteUsersList.innerHTML = ''; 
+                users.forEach(user => {
+                    const li = document.createElement('li');
+                    li.textContent = user.name;
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.value = user.id; // Store user ID in the checkbox value
+                    li.prepend(checkbox);
+                    inviteUsersList.appendChild(li);
+                });
+            } else {
+                console.error('Failed to fetch users');
+            }
+        }
+
+        // Invite users to the group
+        inviteUsersButton.addEventListener('click', async () => {
+    const groupId = getSelectedGroupId(); // Function to get the currently selected group ID
+    const checkboxes = document.querySelectorAll('#inviteUsersList input[type="checkbox"]:checked');
+    const userIds = Array.from(checkboxes).map(checkbox => checkbox.value); // Get selected user IDs
+
+    const selectedGroup = document.querySelector('#groups li.selected');
+    const isAdmin = selectedGroup ? selectedGroup.dataset.isAdmin === 'true' : false; // Check if the user is admin
+    console.log('Is Admin:', isAdmin);
+
+    if (!isAdmin) {
+        alert('Only the group admin can send invitations.');
+        return;
+    }
+
+    if (userIds.length > 0 && groupId) {
+        const token = localStorage.getItem('jwt');
+        const response = await fetch(`/groups/${groupId}/invite`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ userIds })
+        });
+
+                if (response.ok) {
+                    alert('Users invited successfully!');
+                } else {
+                    console.error('Failed to invite users');
+                }
+            } else {
+                alert('Please select at least one user to invite.');
+            }
+        });
+
+        // Fetch User Invitations
+async function fetchUserInvitations() {
+    const token = localStorage.getItem('jwt');
+    if (!token) {
+        console.error('No token found');
+        return;
+    }
+    const response = await fetch('/invitations', {
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+    if (response.ok) {
+        const invitations = await response.json();
+        displayInvitations(invitations);
+    } else {
+        console.error('Failed to fetch invitations');
+    }
+}
+
+// Function to display invitations
+function displayInvitations(invitations) {
+    const invitationList = document.getElementById('invitationsList'); 
+    invitationList.innerHTML = ''; 
+    invitations.forEach(invitation => {
+        const li = document.createElement('li');
+        li.textContent = `You have been invited to join the group: ${invitation.group_name}`;
+        
+        // Accept Invitation Button
+        const acceptButton = document.createElement('button');
+        acceptButton.textContent = 'Accept';
+        acceptButton.onclick = async () => {
+            await acceptInvitation(invitation.id); 
+        };
+        
+        // Reject Invitation Button
+        const rejectButton = document.createElement('button');
+        rejectButton.textContent = 'Reject';
+        rejectButton.onclick = async () => {
+            await rejectInvitation(invitation.id); 
+        };
+
+        li.appendChild(acceptButton);
+        li.appendChild(rejectButton);
+        invitationList.appendChild(li);
+    });
+}
+
+       // Accept Group Invitation
+async function acceptInvitation(invitationId) {
+    const token = localStorage.getItem('jwt');
+    const response = await fetch(`/invitations/${invitationId}/accept`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+
+    if (response.ok) {
+        alert('You have successfully joined the group!');
+        await fetchUserGroups(); // Refresh the group list after accepting the invitation
+        await fetchUserInvitations(); // Optionally refresh the invitations list
+    } else {
+        console.error('Failed to accept invitation');
+    }
+}
+
+        // Reject Group Invitation
+async function rejectInvitation(invitationId) {
+    const token = localStorage.getItem('jwt');
+    const response = await fetch(`/invitations/${invitationId}/reject`, {
+        method: 'DELETE',
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+
+    if (response.ok) {
+        alert('Invitation rejected.');
+        fetchUserInvitations(); // Refresh the invitations list
+    } else {
+        console.error('Failed to reject invitation');
+    }
+}
+
+        // Create a new group
+        createGroupButton.addEventListener('click', async () => {
+            const groupName = groupNameInput.value;
+            if (groupName) {
+                const token = localStorage.getItem('jwt');
+                const response = await fetch('/groups', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ name: groupName })
+                });
+                if (response.ok) {
+                    groupNameInput.value = ''; 
+                    fetchUserGroups(); // Refresh group list
+                } else {
+                    console.error('Failed to create group');
+                }
+            }
+        });
+
+        // Fetch messages for a specific group
+        async function fetchGroupMessages(groupId) {
+            const token = localStorage.getItem('jwt');
+            if (!token) {
+                console.error('No token found');
+                return;
+            }
+            const response = await fetch(`/groups/${groupId}/messages`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            if (response.ok) {
+                const messages = await response.json();
+                messagesDiv.innerHTML = ''; 
+                messages.forEach(msg => {
+                    displayMessage(msg.name, msg.message);
+                });
+            } else {
+                console.error('Failed to fetch group messages');
+            }
         }
 
         // Send message functionality
         sendButton.addEventListener('click', async () => {
             const message = messageInput.value;
-            if (message) {
+            const groupId = getSelectedGroupId(); // Function to get the currently selected group ID
+            if (message && groupId) {
                 const token = localStorage.getItem('jwt');
-                if (!token) {
-                    console.error('No token found');
-                    return;
+                const response = await fetch(`/groups/${groupId}/messages`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ message })
+                });
+
+                if (response.ok) {
+                    messageInput.value = ''; 
+                    displayMessage('You', message); 
+                } else {
+                    console.error('Failed to send message');
                 }
-                const decodedToken = jwt_decode(token); 
-                const userId = decodedToken.id; 
-                await sendMessageToServer(message, userId); 
-                messageInput.value = ''; 
             }
         });
 
-        // Function to send message to the server
-        async function sendMessageToServer(message, userId) {
-            const response = await fetch('/messages', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('jwt')}`
-                },
-                body: JSON.stringify({ message, userId })
-            });
-
-            if (response.ok) {
-                // Store the message in local storage after sending
-                const decodedToken = jwt_decode(localStorage.getItem('jwt'));
-                storeMessageInLocalStorage(decodedToken.name, message);
-                appendMessage(decodedToken.name, message); // Display the new message immediately
-            } else {
-                console.error('Failed to send message');
-            }
-        }
-
-        function storeMessageInLocalStorage(userName, message) {
-            const storedMessages = JSON.parse(localStorage.getItem('messages')) || [];
-            
-            // Check if the message already exists in local storage
-            const isMessageExists = storedMessages.some(storedMsg => storedMsg.message === message);
-            if (!isMessageExists) {
-                // Add the new message to the stored messages
-                storedMessages.push({ name: userName, message: message });
-
-                // Limit to the most recent 10 messages
-                if (storedMessages.length > 10) {
-                    storedMessages.shift(); // Remove the oldest message
-                }
-
-                // Save the updated messages back to local storage
-                localStorage.setItem('messages', JSON.stringify(storedMessages));
-            }
+        // Function to get the currently selected group ID
+        function getSelectedGroupId() {
+            const selectedGroup = document.querySelector('#groups li.selected');
+            return selectedGroup ? selectedGroup.dataset.groupId : null;
         }
 
         let messageFetchInterval; 
 
-        // Call the function to fetch users and messages when the page loads
+        // Call the function to fetch users and groups when the page loads
         fetchUsers();
-        fetchMessages();
+        fetchUserGroups();
+        fetchUserInvitations(); 
 
         // Start polling for new messages every second
-        messageFetchInterval = setInterval(fetchMessages, 1000);
+        messageFetchInterval = setInterval(() => {
+            const groupId = getSelectedGroupId();
+            if (groupId) {
+                fetchGroupMessages(groupId);
+            }
+        }, 1000);
 
         logoutButton.addEventListener('click', async () => {
             const response = await fetch('/logout', {
